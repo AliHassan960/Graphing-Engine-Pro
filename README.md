@@ -11,9 +11,9 @@ This engine is capable of rendering complex mathematical functions, visualizing 
 * **🚀 High Performance:** Renders smooth graphs using the HTML5 Canvas API.
 * **📱 Fully Responsive:** Optimized for Desktop, Tablet, and Mobile. Includes touch gesture support for panning and zooming.
 * **🧮 Symbolic Math:** Powered by `math.js` to parse and handle complex equations (trigonometry, logs, exponents, etc.).
-* **∫ Calculus Visualization:** * **Derivatives:** Visualizes the slope ($f'(x)$) in real-time (Pink dashed line).
-    * **Integrals:** Visualizes the area under the curve ($F(x)$) (Amber dashed line).
-* **📊 Data Tables:** Plot specific $(x, y)$ points manually or auto-generate tables based on your equation.
+* **∫ Calculus Visualization:** * **Derivatives:** Visualizes the slope (f'(x)) in real-time (Pink dashed line).
+    * **Integrals:** Visualizes the area under the curve (F(x)) (Amber dashed line).
+* **📊 Data Tables:** Plot specific (x, y) points manually or auto-generate tables based on your equation.
 * **🎨 Modern UI:** Clean dark mode interface with a collapsible sidebar, helper buttons, and interactive tooltips.
 * **⚡ Zero-Install:** Runs directly in the browser. No backend or build step required.
 
