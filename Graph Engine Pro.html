@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Graphing Engine Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.0/math.js"></script>
+    <style>
+        :root {
+            --bg: #020617;
+            --panel: #0f172a;
+            --text: #e2e8f0;
+            --accent: #06b6d4;       /* Cyan (Function) */
+            --deriv: #ec4899;        /* Pink (Derivative) */
+            --integ: #f59e0b;        /* Amber (Integral) */
+            --point: #ef4444;        /* Red (Data Points) */
+            --border: #1e293b;
+            --input-bg: #1e293b;
+            --error-bg: rgba(239, 68, 68, 0.1);
+            --error-border: rgba(136, 10, 10, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: 380px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 15px;
+            overflow-y: auto;
+            box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        h2 { 
+            color: var(--accent); 
+            font-size: 1.25rem; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+            font-weight: 800; 
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+        }
+        
+        .section-label {
+            font-size: 0.7rem; 
+            text-transform: uppercase; 
+            color: #64748b; 
+            font-weight: bold; 
+            border-bottom: 1px solid var(--border); 
+            padding-bottom: 5px; 
+            margin-bottom: 10px;
+            margin-top: 5px;
+        }
+
+        /* INPUTS & CONTROLS */
+        .input-wrapper { position: relative; }
+        
+        input[type="text"] {
+            width: 100%; 
+            padding: 12px; 
+            background: var(--input-bg); 
+            border: 1px solid var(--border);
+            color: white; 
+            border-radius: 8px; 
+            font-family: 'Fira Code', monospace; 
+            font-size: 1.05rem;
+            transition: all 0.2s ease;
+        }
+        
+        input[type="text"]:focus { 
+            border-color: var(--accent); 
+            outline: none; 
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
+        }
+
+        input[type="text"].input-error {
+            border-color: var(--error-border);
+            background-color: var(--error-bg);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+
+        .toggle-row { 
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+            font-size: 0.9rem; 
+            cursor: pointer; 
+            padding: 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .toggle-row:hover { background: rgba(255,255,255,0.05); }
+        
+        .color-dot { 
+            width: 12px; 
+            height: 12px; 
+            border-radius: 50%; 
+            display: inline-block; 
+            box-shadow: 0 0 5px currentColor;
+        }
+
+        /* BUTTONS */
+        button {
+            width: 100%; 
+            padding: 12px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer;
+            font-weight: 700; 
+            font-size: 0.85rem; 
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .btn-primary { 
+            background: var(--accent); 
+            color: #020617; 
+            margin-top: 8px;
+        }
+        .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        
+        .btn-secondary { background: #334155; color: white; }
+        .btn-secondary:hover { background: #475569; }
+        
+        .btn-danger { background: #991b1b; color: white; margin-top: auto; }
+        .btn-danger:hover { background: #ef4444; }
+        
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+
+        /* DATA TABLE */
+        .data-table-container {
+            max-height: 180px; 
+            overflow-y: auto; 
+            border: 1px solid var(--border);
+            border-radius: 6px; 
+            background: #0f172a;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #334155; padding: 8px; font-size: 0.75rem; position: sticky; top: 0; color: #94a3b8; }
+        td { border-top: 1px solid var(--border); padding: 0; }
+        td input {
+            width: 100%; border: none; background: transparent; color: white;
+            padding: 8px; text-align: center; font-family: monospace; font-size: 0.9rem;
+        }
+        td input:focus { background: #1e293b; outline: none; }
+        
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+        /* HELPER GRID */
+        .func-grid { 
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 6px; 
+        }
+        .func-tag {
+            background: #1e293b; 
+            color: #94a3b8; 
+            font-size: 0.8rem; 
+            padding: 8px;
+            text-align: center; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            user-select: none;
+            border: 1px solid transparent;
+            font-family: 'Fira Code', monospace;
+            transition: all 0.1s;
+        }
+        .func-tag:hover { 
+            background: #334155; 
+            color: white; 
+            border-color: #475569;
+            transform: scale(1.05);
+        }
+        .func-tag:active { transform: scale(0.95); }
+
+        .error-msg { 
+            color: #ef4444; 
+            font-size: 0.85rem; 
+            min-height: 1.4em; 
+            margin-top: 8px; 
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+
+        /* --- CANVAS --- */
+        .canvas-container { flex: 1; position: relative; cursor: crosshair; }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .zoom-controls {
+            position: absolute; bottom: 30px; right: 30px; display: flex; gap: 10px;
+        }
+        .zoom-btn {
+            width: 45px; height: 45px; border-radius: 10px; background: rgba(30, 41, 59, 0.8); 
+            color: white; border: 1px solid var(--border); font-size: 1.4rem; 
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s;
+        }
+        .zoom-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
+
+        #tooltip {
+            position: absolute; 
+            background: rgba(15, 23, 42, 0.95); 
+            color: var(--accent); 
+            padding: 8px 12px; 
+            border-radius: 6px; 
+            font-family: 'Fira Code', monospace; 
+            pointer-events: none; 
+            display: none; 
+            border: 1px solid var(--border);
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>Graph Engine Pro</h2>
+        <h5><i> @Ali Hassan</i></h5>
+        <div>
+            <div class="section-label">Main Function</div>
+            <div class="input-wrapper">
+                <input type="text" id="eqInput"  placeholder="Type equation here..." spellcheck="false">
+            </div>
+            <div id="errorDisplay" class="error-msg"></div>
+            <button class="btn-primary" onclick="updateGraph()">PLOT GRAPH</button>
+        </div>
+
+        <div>
+            <div class="section-label">Mathematical Helpers</div>
+            <div class="func-grid">
+                <div class="func-tag" onclick="addText('^')">^</div>
+                <div class="func-tag" onclick="addText('sqrt(')">√</div>
+                <div class="func-tag" onclick="addText('abs(')">abs</div>
+                <div class="func-tag" onclick="addText('log10(')">log10</div>
+                <div class="func-tag" onclick="addText('sin(')">sin</div>
+                <div class="func-tag" onclick="addText('cos(')">cos</div>
+                <div class="func-tag" onclick="addText('tan(')">tan</div>
+                <div class="func-tag" onclick="addText('log(')">ln</div>
+                <div class="func-tag" onclick="addText('asin(')">asin</div>
+                <div class="func-tag" onclick="addText('acos(')">acos</div>
+                <div class="func-tag" onclick="addText('atan(')">atan</div>
+                <div class="func-tag" onclick="addText('pi')">π</div>
+                <div class="func-tag" onclick="addText('(')">(</div>
+                <div class="func-tag" onclick="addText(')')">)</div>
+                <div class="func-tag" onclick="addText('e')">e</div>
+                <div class="func-tag" onclick="addText('/')">/</div>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-label">Calculus Analysis</div>
+            <label class="toggle-row">
+                <input type="checkbox" id="showDeriv" onchange="updateGraph()">
+                <span class="color-dot" style="background:var(--deriv); color:var(--deriv)"></span> 
+                Show Derivative <span style="font-family:'Fira Code'; margin-left:5px; color:var(--deriv)">f'(x)</span>
+            </label>
+            <label class="toggle-row">
+                <input type="checkbox" id="showInteg" onchange="updateGraph()">
+                <span class="color-dot" style="background:var(--integ); color:var(--integ)"></span> 
+                Show Integral <span style="font-family:'Fira Code'; margin-left:5px; color:var(--integ)">F(x)</span>
+            </label>
+        </div>
+
+        <div>
+            <div class="section-label">Data Points Table</div>
+            <div class="data-table-container">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>X Input</th>
+                            <th>Y Output</th>
+                            <th style="width:25px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        </tbody>
+                </table>
+            </div>
+            <div class="btn-row">
+                <button class="btn-secondary" onclick="addTableRow()">+ Add Point</button>
+                <button class="btn-secondary" onclick="autoFillTable()">Auto-Fill</button>
+            </div>
+        </div>
+
+        <button class="btn-danger" onclick="resetAll()">⚠ RESET SYSTEM</button>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="graphCanvas"></canvas>
+        <div id="tooltip"></div>
+        <div class="zoom-controls">
+            <button class="zoom-btn" onclick="zoom(1.2)">+</button>
+            <button class="zoom-btn" onclick="zoom(0.8)">−</button>
+            <button class="zoom-btn" onclick="resetView()">⟲</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL CONFIG ---
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        const eqInput = document.getElementById('eqInput');
+        const errorBox = document.getElementById('errorDisplay');
+        const tableBody = document.getElementById('tableBody');
+        const tooltip = document.getElementById('tooltip');
+
+        // View State
+        let state = {
+            scale: 60, // Pixels per unit
+            offsetX: 0,
+            offsetY: 0,
+            isDragging: false,
+            lastX: 0, lastY: 0
+        };
+
+        // Compiled Math Objects
+        let compiledFunc = null;
+        let compiledDeriv = null;
+        let compiledInteg = null;
+
+        // --- 1. ROBUST ERROR HANDLING & COMPILATION ---
+        function compileEquations() {
+            // Clear previous errors
+            eqInput.classList.remove('input-error');
+            errorBox.textContent = "";
+
+            const rawEq = eqInput.value.trim();
+            if (!rawEq) return false;
+
+            try {
+                // 1. Parse Main Function
+                const node = math.parse(rawEq);
+                compiledFunc = node.compile();
+
+                // 2. Parse Derivative (Safely)
+                if (document.getElementById('showDeriv').checked) {
+                    try {
+                        compiledDeriv = math.derivative(node, 'x').compile();
+                    } catch (e) { 
+                        // Silent fail for derivative if math doesn't support it (e.g. discrete points)
+                        compiledDeriv = null; 
+                    }
+                } else { compiledDeriv = null; }
+
+                // 3. Integral Flag
+                compiledInteg = document.getElementById('showInteg').checked;
+
+                return true;
+
+            } catch (err) {
+                // VISUAL ERROR FEEDBACK
+                eqInput.classList.add('input-error');
+                
+                // Translate cryptic error messages to human-readable ones
+                let msg = err.message;
+                if (msg.includes("Unexpected end of expression")) msg = "Equation is incomplete.";
+                if (msg.includes("Value expected")) msg = "Missing a value or parenthesis.";
+                if (msg.includes("Undefined symbol")) msg = "Unknown variable. Use 'x'.";
+                if (msg.includes("Parenthesis ) expected")) msg = "Missing closing parenthesis ')'.";
+                
+                errorBox.textContent = "Error: " + msg;
+                return false;
+            }
+        }
+
+        // --- 2. TABLE LOGIC ---
+        function addTableRow(xVal = '', yVal = '') {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><input type="number" step="any" class="x-input" value="${xVal}" oninput="draw()"></td>
+                <td><input type="number" step="any" class="y-input" value="${yVal}" oninput="draw()"></td>
+                <td style="text-align:center; cursor:pointer; color:#ef4444; font-weight:bold;" onclick="this.parentElement.remove(); draw()">×</td>
+            `;
+            tableBody.appendChild(row);
+        }
+
+        function autoFillTable() {
+            if (!compiledFunc) {
+                if(!compileEquations()) {
+                    alert("Please enter a valid equation first.");
+                    return;
+                }
+            }
+            // Clear and fill -5 to 5
+            tableBody.innerHTML = '';
+            for (let i = -5; i <= 5; i++) {
+                try {
+                    const y = compiledFunc.evaluate({x: i});
+                    // Only add if it's a real finite number
+                    if(isFinite(y) && !isNaN(y)) {
+                        addTableRow(i, parseFloat(y.toFixed(3)));
+                    }
+                } catch(e) {}
+            }
+            draw();
+        }
+
+        function getTablePoints() {
+            const rows = tableBody.querySelectorAll('tr');
+            const points = [];
+            rows.forEach(row => {
+                const x = parseFloat(row.querySelector('.x-input').value);
+                const y = parseFloat(row.querySelector('.y-input').value);
+                if (!isNaN(x) && !isNaN(y)) points.push({x, y});
+            });
+            return points;
+        }
+
+        // --- 3. DRAWING ENGINE (OPTIMIZED) ---
+        function draw() {
+            // Resize
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            const w = canvas.width;
+            const h = canvas.height;
+            const cx = w / 2 + state.offsetX;
+            const cy = h / 2 + state.offsetY;
+
+            // Clear Background
+            ctx.fillStyle = "#020617";
+            ctx.fillRect(0, 0, w, h);
+
+            // Draw Grid & Axes
+            drawGrid(ctx, w, h, cx, cy);
+
+            if (!compiledFunc) return;
+
+            // Safe Draw Wrapper to prevent loop crashing
+            try {
+                // Layer 1: Integral (Amber Area)
+                if (compiledInteg) {
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "#f59e0b";
+                    ctx.setLineDash([2, 6]);
+                    plotIntegralNumerical(ctx, (x) => compiledFunc.evaluate({x}), w, h, cx, cy);
+                    ctx.setLineDash([]);
+                }
+
+                // Layer 2: Derivative (Pink Dashed)
+                if (compiledDeriv) {
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "#ec4899";
+                    ctx.setLineDash([6, 4]);
+                    plotFunction(ctx, (x) => compiledDeriv.evaluate({x}), w, h, cx, cy);
+                    ctx.setLineDash([]);
+                }
+
+                // Layer 3: Main Function (Cyan Solid)
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "#06b6d4";
+                plotFunction(ctx, (x) => compiledFunc.evaluate({x}), w, h, cx, cy);
+
+                // Layer 4: Data Points (Red Dots)
+                const points = getTablePoints();
+                points.forEach(p => {
+                    const px = cx + p.x * state.scale;
+                    const py = cy - p.y * state.scale;
+                    
+                    // Drop lines
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(px, cy); ctx.lineTo(px, py); // Vertical
+                    ctx.moveTo(cx, py); ctx.lineTo(px, py); // Horizontal
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Dot
+                    ctx.fillStyle = "#ef4444";
+                    ctx.beginPath();
+                    ctx.arc(px, py, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = "#fff";
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // Label
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "12px monospace";
+                    ctx.fillText(`(${p.x},${p.y})`, px + 8, py - 8);
+                });
+            } catch (drawError) {
+                // Catch runtime errors during draw (like complex numbers)
+                // console.log("Draw skipped frame due to math error");
+            }
+        }
+
+        // --- 4. PLOTTER HELPERS ---
+        function drawGrid(ctx, w, h, cx, cy) {
+            ctx.lineWidth = 1; ctx.strokeStyle = "#1e293b"; ctx.beginPath();
+            
+            const startX = Math.floor((0 - cx) / state.scale);
+            const endX = Math.ceil((w - cx) / state.scale);
+            const startY = Math.floor((0 - cy) / state.scale);
+            const endY = Math.ceil((h - cy) / state.scale);
+
+            for(let i=startX; i<=endX; i++) { let x = cx + i*state.scale; ctx.moveTo(x,0); ctx.lineTo(x,h); }
+            for(let i=startY; i<=endY; i++) { let y = cy - i*state.scale; ctx.moveTo(0,y); ctx.lineTo(w,y); }
+            ctx.stroke();
+
+            // Axes
+            ctx.lineWidth = 2; ctx.strokeStyle = "#64748b"; ctx.beginPath();
+            ctx.moveTo(0, cy); ctx.lineTo(w, cy); 
+            ctx.moveTo(cx, 0); ctx.lineTo(cx, h); 
+            ctx.stroke();
+        }
+
+        function plotFunction(ctx, func, w, h, cx, cy) {
+            ctx.beginPath();
+            let move = true;
+            for (let px = 0; px < w; px++) {
+                const x = (px - cx) / state.scale;
+                try {
+                    const y = func(x);
+                    // Check for valid number (not Infinity, not NaN, not Complex)
+                    if (typeof y !== 'number' || !isFinite(y)) { move = true; continue; }
+                    
+                    const py = cy - y * state.scale;
+                    // Clipping optimization
+                    if (py < -h || py > h*2) { move = true; continue; }
+                    
+                    if (move) { ctx.moveTo(px, py); move = false; } else { ctx.lineTo(px, py); }
+                } catch(e) { move = true; }
+            }
+            ctx.stroke();
+        }
+
+        function plotIntegralNumerical(ctx, func, w, h, cx, cy) {
+            ctx.beginPath();
+            let area = 0;
+            const dx = 1 / state.scale;
+            ctx.moveTo(cx, cy);
+
+            // Positive X
+            for (let px = cx; px < w; px++) {
+                const x = (px - cx) / state.scale;
+                try {
+                    const y = func(x);
+                    if(typeof y === 'number' && isFinite(y)) { area += y * dx; ctx.lineTo(px, cy - area * state.scale); }
+                } catch(e){}
+            }
+            // Negative X
+            area = 0; ctx.moveTo(cx, cy);
+            for (let px = cx; px > 0; px--) {
+                const x = (px - cx) / state.scale;
+                try {
+                    const y = func(x);
+                    if(typeof y === 'number' && isFinite(y)) { area -= y * dx; ctx.lineTo(px, cy - area * state.scale); }
+                } catch(e){}
+            }
+            ctx.stroke();
+        }
+
+        // --- 5. INTERACTION & UTILS ---
+        function updateGraph() {
+            compileEquations();
+            draw();
+        }
+
+        function addText(txt) {
+            eqInput.value += txt;
+            eqInput.focus();
+            // Trigger compile on helper click to clear errors immediately
+            updateGraph();
+        }
+
+        function resetAll() {
+            eqInput.value = "";
+            compiledFunc = null; compiledDeriv = null; compiledInteg = null;
+            tableBody.innerHTML = "";
+            document.getElementById('showDeriv').checked = false;
+            document.getElementById('showInteg').checked = false;
+            // Clear errors
+            eqInput.classList.remove('input-error');
+            errorBox.textContent = "";
+            
+            addTableRow(0,0);
+            resetView();
+        }
+
+        // Mouse Events
+        canvas.addEventListener('mousedown', e => { state.isDragging=true; state.lastX=e.clientX; state.lastY=e.clientY; canvas.style.cursor='grabbing'; });
+        window.addEventListener('mouseup', () => { state.isDragging=false; canvas.style.cursor='crosshair'; });
+        window.addEventListener('mousemove', e => {
+            if(state.isDragging) {
+                state.offsetX += e.clientX - state.lastX;
+                state.offsetY += e.clientY - state.lastY;
+                state.lastX = e.clientX; state.lastY = e.clientY;
+                draw();
+            }
+            // Tooltip
+            const rect = canvas.getBoundingClientRect();
+            const cx = canvas.width/2 + state.offsetX;
+            const cy = canvas.height/2 + state.offsetY;
+            const mx = (e.clientX - rect.left - cx) / state.scale;
+            const my = (cy - (e.clientY - rect.top)) / state.scale;
+            tooltip.style.left = (e.clientX+15)+'px';
+            tooltip.style.top = (e.clientY+15)+'px';
+            tooltip.textContent = `x:${mx.toFixed(2)}, y:${my.toFixed(2)}`;
+            tooltip.style.display = 'block';
+        });
+        canvas.addEventListener('mouseleave', () => tooltip.style.display='none');
+        window.addEventListener('resize', draw);
+
+        // Zoom & Pan
+        function zoom(f) { state.scale *= f; draw(); }
+        function resetView() { state.scale=60; state.offsetX=0; state.offsetY=0; draw(); }
+        canvas.addEventListener('wheel', e => {
+             e.preventDefault();
+             zoom(e.deltaY < 0 ? 1.1 : 0.9);
+        }, {passive: false});
+
+        // Initialize
+        updateGraph();
+        addTableRow(0,0);
+
+    </script>
+</body>
+</html>
