@@ -338,6 +338,38 @@
         let compiledDeriv = null;
         let compiledInteg = null;
 
+        // Performance: Track canvas dimensions to avoid unnecessary resize
+        let canvasWidth = 0;
+        let canvasHeight = 0;
+
+        // Performance: Animation frame request ID for cancellation
+        let animationFrameId = null;
+
+        // Performance: Debounce utility function
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Performance: Throttle utility function for high-frequency events
+        function throttle(func, limit) {
+            let inThrottle;
+            return function(...args) {
+                if (!inThrottle) {
+                    func.apply(this, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            };
+        }
+
         // --- 1. ROBUST ERROR HANDLING & COMPILATION ---
         function compileEquations() {
             // Clear previous errors
@@ -387,11 +419,12 @@
         function addTableRow(xVal = '', yVal = '') {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td><input type="number" step="any" class="x-input" value="${xVal}" oninput="draw()"></td>
-                <td><input type="number" step="any" class="y-input" value="${yVal}" oninput="draw()"></td>
-                <td style="text-align:center; cursor:pointer; color:#ef4444; font-weight:bold;" onclick="this.parentElement.remove(); draw()">×</td>
+                <td><input type="number" step="any" class="x-input" value="${xVal}" oninput="invalidateTablePoints(); scheduleDraw()"></td>
+                <td><input type="number" step="any" class="y-input" value="${yVal}" oninput="invalidateTablePoints(); scheduleDraw()"></td>
+                <td style="text-align:center; cursor:pointer; color:#ef4444; font-weight:bold;" onclick="this.parentElement.remove(); invalidateTablePoints(); scheduleDraw()">×</td>
             `;
             tableBody.appendChild(row);
+            invalidateTablePoints();
         }
 
         function autoFillTable() {
@@ -403,6 +436,7 @@
             }
             // Clear and fill -5 to 5
             tableBody.innerHTML = '';
+            invalidateTablePoints();
             for (let i = -5; i <= 5; i++) {
                 try {
                     const y = compiledFunc.evaluate({x: i});
@@ -412,41 +446,87 @@
                     }
                 } catch(e) {}
             }
-            draw();
+            scheduleDraw();
         }
 
+        // Performance: Cache table points to avoid repeated DOM queries
+        let cachedTablePoints = null;
+        let tablePointsDirty = true;
+
         function getTablePoints() {
+            // Return cached points if still valid
+            if (!tablePointsDirty && cachedTablePoints !== null) {
+                return cachedTablePoints;
+            }
+            
             const rows = tableBody.querySelectorAll('tr');
             const points = [];
-            rows.forEach(row => {
-                const x = parseFloat(row.querySelector('.x-input').value);
-                const y = parseFloat(row.querySelector('.y-input').value);
-                if (!isNaN(x) && !isNaN(y)) points.push({x, y});
-            });
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const xInput = row.querySelector('.x-input');
+                const yInput = row.querySelector('.y-input');
+                if (xInput && yInput) {
+                    const x = parseFloat(xInput.value);
+                    const y = parseFloat(yInput.value);
+                    if (!isNaN(x) && !isNaN(y)) points.push({x, y});
+                }
+            }
+            cachedTablePoints = points;
+            tablePointsDirty = false;
             return points;
         }
 
+        // Mark table points as dirty when table changes
+        function invalidateTablePoints() {
+            tablePointsDirty = true;
+        }
+
         // --- 3. DRAWING ENGINE (OPTIMIZED) ---
+        // Performance: Schedule draw using requestAnimationFrame to batch renders
+        function scheduleDraw() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            animationFrameId = requestAnimationFrame(draw);
+        }
+
+        // Performance: Only resize canvas when container dimensions actually change
+        function updateCanvasSize() {
+            const containerWidth = canvas.parentElement.clientWidth;
+            const containerHeight = canvas.parentElement.clientHeight;
+            
+            if (canvasWidth !== containerWidth || canvasHeight !== containerHeight) {
+                canvas.width = containerWidth;
+                canvas.height = containerHeight;
+                canvasWidth = containerWidth;
+                canvasHeight = containerHeight;
+                return true;
+            }
+            return false;
+        }
+
         function draw() {
-            // Resize
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
-            const w = canvas.width;
-            const h = canvas.height;
-            const cx = w / 2 + state.offsetX;
-            const cy = h / 2 + state.offsetY;
-
-            // Clear Background
-            ctx.fillStyle = "#020617";
-            ctx.fillRect(0, 0, w, h);
-
-            // Draw Grid & Axes
-            drawGrid(ctx, w, h, cx, cy);
-
-            if (!compiledFunc) return;
-
-            // Safe Draw Wrapper to prevent loop crashing
+            animationFrameId = null;
+            
             try {
+                // Performance: Only resize when necessary
+                updateCanvasSize();
+                
+                const w = canvas.width;
+                const h = canvas.height;
+                const cx = w / 2 + state.offsetX;
+                const cy = h / 2 + state.offsetY;
+
+                // Clear Background
+                ctx.fillStyle = "#020617";
+                ctx.fillRect(0, 0, w, h);
+
+                // Draw Grid & Axes
+                drawGrid(ctx, w, h, cx, cy);
+
+                if (!compiledFunc) return;
+
+                // Safe Draw Wrapper to prevent loop crashing
                 // Layer 1: Integral (Amber Area)
                 if (compiledInteg) {
                     ctx.lineWidth = 2;
@@ -575,7 +655,7 @@
         // --- 5. INTERACTION & UTILS ---
         function updateGraph() {
             compileEquations();
-            draw();
+            scheduleDraw();
         }
 
         function addText(txt) {
@@ -594,22 +674,15 @@
             // Clear errors
             eqInput.classList.remove('input-error');
             errorBox.textContent = "";
+            // Invalidate cache
+            invalidateTablePoints();
             
             addTableRow(0,0);
             resetView();
         }
 
-        // Mouse Events
-        canvas.addEventListener('mousedown', e => { state.isDragging=true; state.lastX=e.clientX; state.lastY=e.clientY; canvas.style.cursor='grabbing'; });
-        window.addEventListener('mouseup', () => { state.isDragging=false; canvas.style.cursor='crosshair'; });
-        window.addEventListener('mousemove', e => {
-            if(state.isDragging) {
-                state.offsetX += e.clientX - state.lastX;
-                state.offsetY += e.clientY - state.lastY;
-                state.lastX = e.clientX; state.lastY = e.clientY;
-                draw();
-            }
-            // Tooltip
+        // Performance: Throttled tooltip update function
+        const updateTooltip = throttle((e) => {
             const rect = canvas.getBoundingClientRect();
             const cx = canvas.width/2 + state.offsetX;
             const cy = canvas.height/2 + state.offsetY;
@@ -619,16 +692,42 @@
             tooltip.style.top = (e.clientY+15)+'px';
             tooltip.textContent = `x:${mx.toFixed(2)}, y:${my.toFixed(2)}`;
             tooltip.style.display = 'block';
+        }, 16); // ~60fps throttle
+
+        // Mouse Events
+        canvas.addEventListener('mousedown', e => { state.isDragging=true; state.lastX=e.clientX; state.lastY=e.clientY; canvas.style.cursor='grabbing'; });
+        window.addEventListener('mouseup', () => { state.isDragging=false; canvas.style.cursor='crosshair'; });
+        window.addEventListener('mousemove', e => {
+            if(state.isDragging) {
+                state.offsetX += e.clientX - state.lastX;
+                state.offsetY += e.clientY - state.lastY;
+                state.lastX = e.clientX; state.lastY = e.clientY;
+                scheduleDraw();
+            }
+            // Performance: Use throttled tooltip update
+            updateTooltip(e);
         });
         canvas.addEventListener('mouseleave', () => tooltip.style.display='none');
-        window.addEventListener('resize', draw);
+        
+        // Performance: Debounced resize handler
+        const debouncedResize = debounce(() => {
+            scheduleDraw();
+        }, 100);
+        window.addEventListener('resize', debouncedResize);
 
         // Zoom & Pan
-        function zoom(f) { state.scale *= f; draw(); }
-        function resetView() { state.scale=60; state.offsetX=0; state.offsetY=0; draw(); }
-        canvas.addEventListener('wheel', e => {
-             e.preventDefault();
-             zoom(e.deltaY < 0 ? 1.1 : 0.9);
+        function zoom(f) { state.scale *= f; scheduleDraw(); }
+        function resetView() { state.scale=60; state.offsetX=0; state.offsetY=0; scheduleDraw(); }
+        
+        // Performance: Throttled wheel zoom handler with synchronous preventDefault
+        let wheelThrottled = false;
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault(); // Must be synchronous for passive: false
+            if (!wheelThrottled) {
+                zoom(e.deltaY < 0 ? 1.1 : 0.9);
+                wheelThrottled = true;
+                setTimeout(() => wheelThrottled = false, 16); // ~60fps throttle
+            }
         }, {passive: false});
 
         // Initialize
